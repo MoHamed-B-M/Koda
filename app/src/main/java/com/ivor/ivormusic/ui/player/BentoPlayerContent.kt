@@ -164,7 +164,6 @@ fun BentoPlayerSheetContent(
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .statusBarsPadding()
                         .padding(horizontal = 12.dp)
                         .padding(top = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -173,6 +172,7 @@ fun BentoPlayerSheetContent(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .statusBarsPadding()
                             .height(56.dp),
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {

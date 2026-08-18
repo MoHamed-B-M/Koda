@@ -88,129 +88,126 @@ fun ExpandablePlayer(
         if (!isExpanded) styleWheel.dismiss()
     }
 
-    val configuration = LocalConfiguration.current
-    val screenHeight = configuration.screenHeightDp.dp
-    val screenWidth = configuration.screenWidthDp.dp
-    val density = LocalDensity.current
-    val bottomWindowInsets = WindowInsets.navigationBars
-    val bottomInset = with(density) { bottomWindowInsets.getBottom(this).toDp() }
-    
-    // Single animated progress (0f = collapsed, 1f = expanded)
-    // Using Material Physics slowSpatialSpec for full-screen animations.
-    //
-    // An Animatable rather than animateFloatAsState so a back gesture can
-    // scrub it. Same spec, same overshoot, so the coerceAtLeast guards below
-    // stay exactly as load-bearing as they were.
-    val expandSpec = MaterialTheme.motionScheme.slowSpatialSpec<Float>()
-    val expand = remember { Animatable(if (isExpanded) 1f else 0f) }
-    LaunchedEffect(isExpanded) {
-        expand.animateTo(if (isExpanded) 1f else 0f, expandSpec)
-    }
-    val expandProgress = expand.value
-
-    /**
-     * Back on the expanded player previews the collapse it is going to do.
-     *
-     * This surface is the easy case, and the reason is [expandProgress]: the
-     * player is already one value from mini pill to full screen, with every
-     * height, padding, corner and alpha derived from it, so a preview is that
-     * value scrubbed rather than a new animation invented alongside it. What
-     * the finger reveals is the real destination, because there is no
-     * separate "leaving" state to draw.
-     *
-     * It also replaces eight identical `BackHandler(enabled = true) {
-     * onCollapse() }` blocks, one per player style. Back handlers resolve most
-     * recent first, so eight children each claiming the gesture made which one
-     * answered a question about composition order. One handler on the
-     * container is both fewer lines and better defined.
-     */
-    val playerScope = rememberCoroutineScope()
-    PredictiveBackHandler(enabled = isExpanded) { events ->
-        try {
-            events.collect { event ->
-                expand.snapTo(
-                    androidx.compose.ui.util.lerp(1f, PLAYER_BACK_PEEK, event.progress.coerceIn(0f, 1f))
-                )
-            }
-            // Committed. LaunchedEffect(isExpanded) carries it the rest of the
-            // way down from wherever the finger left it.
-            onExpandChange(false)
-        } catch (cancelled: CancellationException) {
-            // Launched from the player's own scope: the coroutine this runs in
-            // is the one being cancelled, so a spring started here would never
-            // move and the player would sit shrunken.
-            playerScope.launch { expand.animateTo(1f, expandSpec) }
-        }
-    }
-
-
-    // Derive all properties from the single progress value
-    val collapsedHeight = 80.dp
-    val collapsedWidthPadding = 16.dp
-    val collapsedBottomPadding = collapsedBottomSpacing + bottomInset
-    // Exactly half the collapsed height: a radius larger than that (the old
-    // 50.dp) is illegal for the shape and rendered visibly distorted corners.
-    // It also now matches MiniPlayerContent's inner 50% pill, so the ripple
-    // and the container clip along the same outline.
-    val collapsedCornerRadius = collapsedHeight / 2
-
-    val expandedHeight = screenHeight
-    val expandedWidthPadding = 0.dp
-    val expandedBottomPadding = 0.dp
-    val expandedCornerRadius = 0.dp
-
-    // Interpolated values based on progress
-    val height = lerp(collapsedHeight, expandedHeight, expandProgress)
-    val widthPadding = lerp(collapsedWidthPadding, expandedWidthPadding, expandProgress)
-    val bottomPadding = lerp(collapsedBottomPadding, expandedBottomPadding, expandProgress)
-    val cornerRadius = lerp(collapsedCornerRadius, expandedCornerRadius, expandProgress)
-        .coerceAtMost(height / 2)
-    // Soft floating-pill depth while collapsed, gone once fullscreen
-    val pillShadowElevation = lerp(8.dp, 0.dp, expandProgress)
-
-    // Color interpolation - collapsed shows surface, expanded shows transparent
-    val containerColor = MaterialTheme.colorScheme.surfaceContainerHigh.copy(
-        alpha = 1f - expandProgress
-    )
-
-    // Swipe Logic for expand/collapse (vertical)
-    var verticalDragOffset by remember { mutableFloatStateOf(0f) }
-    val verticalSwipeThreshold = -50f
-    
-    // Swipe Logic for dismiss (horizontal) - only when collapsed
-    var horizontalDragOffset by remember { mutableFloatStateOf(0f) }
-    var isDismissing by remember { mutableStateOf(false) }
-    val horizontalDismissThreshold = with(density) { 100.dp.toPx() }
-    
-    // Dismiss animation - slides out and fades
-    val dismissOffsetTarget = if (isDismissing) {
-        // Slide out in the direction of the swipe
-        if (horizontalDragOffset > 0) with(density) { screenWidth.toPx() } else with(density) { -screenWidth.toPx() }
-    } else {
-        horizontalDragOffset
-    }
-    
-    val animatedHorizontalOffset by animateFloatAsState(
-        targetValue = if (!isExpanded) dismissOffsetTarget else 0f,
-        animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
-        finishedListener = { 
-            if (isDismissing) {
-                viewModel.clearPlayer()
-                isDismissing = false
-                horizontalDragOffset = 0f
-            }
-        },
-        label = "horizontalOffset"
-    )
-    
-    // Alpha based on swipe distance
-    val dismissAlpha = if (isDismissing) 0f else 1f - (animatedHorizontalOffset.absoluteValue / (horizontalDismissThreshold * 2)).coerceIn(0f, 0.5f)
-
-    // Container
-    Box(
+    BoxWithConstraints(
         modifier = modifier.fillMaxSize(),
         contentAlignment = Alignment.BottomCenter
     ) {
+        val fullScreenHeight = maxHeight
+        val fullScreenWidth = maxWidth
+        val density = LocalDensity.current
+        val bottomWindowInsets = WindowInsets.navigationBars
+        val bottomInset = with(density) { bottomWindowInsets.getBottom(this).toDp() }
+        
+        // Single animated progress (0f = collapsed, 1f = expanded)
+        // Using Material Physics slowSpatialSpec for full-screen animations.
+        //
+        // An Animatable rather than animateFloatAsState so a back gesture can
+        // scrub it. Same spec, same overshoot, so the coerceAtLeast guards below
+        // stay exactly as load-bearing as they were.
+        val expandSpec = MaterialTheme.motionScheme.slowSpatialSpec<Float>()
+        val expand = remember { Animatable(if (isExpanded) 1f else 0f) }
+        LaunchedEffect(isExpanded) {
+            expand.animateTo(if (isExpanded) 1f else 0f, expandSpec)
+        }
+        val expandProgress = expand.value
+
+        /**
+         * Back on the expanded player previews the collapse it is going to do.
+         *
+         * This surface is the easy case, and the reason is [expandProgress]: the
+         * player is already one value from mini pill to full screen, with every
+         * height, padding, corner and alpha derived from it, so a preview is that
+         * value scrubbed rather than a new animation invented alongside it. What
+         * the finger reveals is the real destination, because there is no
+         * separate "leaving" state to draw.
+         *
+         * It also replaces eight identical `BackHandler(enabled = true) {
+         * onCollapse() }` blocks, one per player style. Back handlers resolve most
+         * recent first, so eight children each claiming the gesture made which one
+         * answered a question about composition order. One handler on the
+         * container is both fewer lines and better defined.
+         */
+        val playerScope = rememberCoroutineScope()
+        PredictiveBackHandler(enabled = isExpanded) { events ->
+            try {
+                events.collect { event ->
+                    expand.snapTo(
+                        androidx.compose.ui.util.lerp(1f, PLAYER_BACK_PEEK, event.progress.coerceIn(0f, 1f))
+                    )
+                }
+                // Committed. LaunchedEffect(isExpanded) carries it the rest of the
+                // way down from wherever the finger left it.
+                onExpandChange(false)
+            } catch (cancelled: CancellationException) {
+                // Launched from the player's own scope: the coroutine this runs in
+                // is the one being cancelled, so a spring started here would never
+                // move and the player would sit shrunken.
+                playerScope.launch { expand.animateTo(1f, expandSpec) }
+            }
+        }
+
+        // Derive all properties from the single progress value
+        val collapsedHeight = 80.dp
+        val collapsedWidthPadding = 16.dp
+        val collapsedBottomPadding = collapsedBottomSpacing + bottomInset
+        // Exactly half the collapsed height: a radius larger than that (the old
+        // 50.dp) is illegal for the shape and rendered visibly distorted corners.
+        // It also now matches MiniPlayerContent's inner 50% pill, so the ripple
+        // and the container clip along the same outline.
+        val collapsedCornerRadius = collapsedHeight / 2
+
+        val expandedHeight = fullScreenHeight
+        val expandedWidthPadding = 0.dp
+        val expandedBottomPadding = 0.dp
+        val expandedCornerRadius = 0.dp
+
+        // Interpolated values based on progress
+        val height = lerp(collapsedHeight, expandedHeight, expandProgress)
+        val widthPadding = lerp(collapsedWidthPadding, expandedWidthPadding, expandProgress)
+        val bottomPadding = lerp(collapsedBottomPadding, expandedBottomPadding, expandProgress)
+        val cornerRadius = lerp(collapsedCornerRadius, expandedCornerRadius, expandProgress)
+            .coerceAtMost(height / 2)
+        // Soft floating-pill depth while collapsed, gone once fullscreen
+        val pillShadowElevation = lerp(8.dp, 0.dp, expandProgress)
+
+        // Color interpolation - collapsed shows surface, expanded shows transparent
+        val containerColor = MaterialTheme.colorScheme.surfaceContainerHigh.copy(
+            alpha = 1f - expandProgress
+        )
+
+        // Swipe Logic for expand/collapse (vertical)
+        var verticalDragOffset by remember { mutableFloatStateOf(0f) }
+        val verticalSwipeThreshold = -50f
+        
+        // Swipe Logic for dismiss (horizontal) - only when collapsed
+        var horizontalDragOffset by remember { mutableFloatStateOf(0f) }
+        var isDismissing by remember { mutableStateOf(false) }
+        val horizontalDismissThreshold = with(density) { 100.dp.toPx() }
+        
+        // Dismiss animation - slides out and fades
+        val dismissOffsetTarget = if (isDismissing) {
+            // Slide out in the direction of the swipe
+            if (horizontalDragOffset > 0) with(density) { fullScreenWidth.toPx() } else with(density) { -fullScreenWidth.toPx() }
+        } else {
+            horizontalDragOffset
+        }
+        
+        val animatedHorizontalOffset by animateFloatAsState(
+            targetValue = if (!isExpanded) dismissOffsetTarget else 0f,
+            animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
+            finishedListener = { 
+                if (isDismissing) {
+                    viewModel.clearPlayer()
+                    isDismissing = false
+                    horizontalDragOffset = 0f
+                }
+            },
+            label = "horizontalOffset"
+        )
+        
+        // Alpha based on swipe distance
+        val dismissAlpha = if (isDismissing) 0f else 1f - (animatedHorizontalOffset.absoluteValue / (horizontalDismissThreshold * 2)).coerceIn(0f, 0.5f)
+
         Surface(
             modifier = Modifier
                 .padding(bottom = bottomPadding.coerceAtLeast(0.dp))
