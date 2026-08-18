@@ -1,15 +1,12 @@
-name: Auto Preview Release
+name: Build and Upload APK Artifact
 
 on:
   push:
     branches:
       - main
 
-permissions:
-  contents: write
-
 jobs:
-  build-and-release:
+  build:
     runs-on: ubuntu-latest
 
     steps:
@@ -34,22 +31,3 @@ jobs:
         with:
           name: app-release-apk
           path: app/build/outputs/apk/release/app-release.apk
-
-      - name: Delete Existing Pre-release Tag and Release
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          TAG_NAME="preview"
-          # These commands will safely continue even if the release/tag doesn't exist yet
-          gh release delete "$TAG_NAME" --yes --cleanup-tag || true
-          git push origin --delete "$TAG_NAME" || true
-
-      - name: Create New Pre-release (Source Only)
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: preview
-          name: "Preview Build (Auto)"
-          body: "Automatically updated source code release. The built APK can be downloaded from the GitHub Actions workflow artifacts section."
-          prerelease: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
