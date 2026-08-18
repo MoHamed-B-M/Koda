@@ -44,18 +44,9 @@ android {
             isUniversalApk = true
         }
     }
-    signingConfigs {
-        create("release") {
-            storeFile = file("${project.rootDir}/keystore/ivormusic.jks")
-            storePassword = signingCredential("KEYSTORE_PASSWORD", "keystore.storePassword")
-            keyAlias = signingCredential("KEY_ALIAS", "keystore.keyAlias")
-            keyPassword = signingCredential("KEY_PASSWORD", "keystore.keyPassword")
-        }
-    }
-
     buildTypes {
         release {
-            signingConfig = signingConfigs.getByName("release")
+            signingConfig = signingConfigs.getByName("debug")
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(

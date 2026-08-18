@@ -1,0 +1,49 @@
+name: Auto Preview Release
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          cache: 'gradle'
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Build Release APK
+        run: ./gradlew assembleRelease
+
+      - name: Delete Existing Pre-release Tag and Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG_NAME="preview"
+          gh release delete "$TAG_NAME" --yes --cleanup-tag || true
+          git push origin --delete "$TAG_NAME" || true
+
+      - name: Create New Pre-release and Upload APK
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: preview
+          name: "Preview Build (Auto)"
+          body: "Automatically updated release build."
+          prerelease: true
+          files: app/build/outputs/apk/release/app-release.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
