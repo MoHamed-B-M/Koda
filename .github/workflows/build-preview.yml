@@ -3,11 +3,14 @@ name: Auto Preview Release
 on:
   push:
     branches:
-      - main # Change this to your default branch if it's different (e.g., master)
+      - main
+
+# Add permissions block to fix the 403 Forbidden error
+permissions:
+  contents: write
 
 jobs:
   build-and-release:
-  
     runs-on: ubuntu-latest
 
     steps:
@@ -24,28 +27,24 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      - name: Build Debug APK
-        run: ./gradlew assembleDebug
+      - name: Build Release APK
+        run: ./gradlew assembleRelease
 
       - name: Delete Existing Pre-release Tag and Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG_NAME="preview"
-          
-          # Delete the release if it exists
           gh release delete "$TAG_NAME" --yes --cleanup-tag || true
-          
-          # Delete the remote tag if it exists
           git push origin --delete "$TAG_NAME" || true
 
       - name: Create New Pre-release and Upload APK
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: preview
           name: "Preview Build (Auto)"
-          body: "Automatically updated preview build built from the latest commit on main."
+          body: "Automatically updated release build."
           prerelease: true
-          files: app/build/outputs/apk/debug/app-debug.apk
+          files: app/build/outputs/apk/release/app-release.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
